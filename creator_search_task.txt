@@ -1,0 +1,273 @@
+// export const searchTask3 = async (req: Request, res: Response) => {
+//   const { searchTerm, page = 1, filters } = req.body;
+//   const size = 10;
+//   const currentPage = Math.max(1, parseInt(page as string));
+//   const from = (currentPage - 1) * size;
+
+//   try {
+//     const processedTerm = (searchTerm?.toString() || "").toLowerCase().trim();
+//     const rootTerm = processedTerm.replace(/[0-9]+$/, "");
+//     const isShortTerm = rootTerm.length <= 3 || /^\d+$/.test(rootTerm);
+
+//     const filterConditions = [];
+
+//     // 💡 Existing filter: Only show ACTIVE tasks
+//     filterConditions.push({
+//       term: { "status": "ACTIVE" },
+//     });
+
+//     // ... existing filters (nicheId, budget, platform, etc.) ...
+    
+//     if (filters?.nicheId) {
+//         filterConditions.push({
+//             term: { "nicheId.keyword": filters.nicheId },
+//         });
+//     }
+
+//     if (filters?.budget) {
+//         const budgetRange: { gte?: number; lte?: number } = {};
+//         if (filters.budget.min !== undefined && filters.budget.min !== null) {
+//             budgetRange.gte = filters.budget.min;
+//         }
+//         if (filters.budget.max !== undefined && filters.budget.max !== null) {
+//             budgetRange.lte = filters.budget.max;
+//         }
+//         if (Object.keys(budgetRange).length > 0) {
+//             filterConditions.push({
+//                 range: { budget: budgetRange },
+//             });
+//         }
+//     }
+
+//     if (filters?.platform) {
+//         filterConditions.push({
+//             term: { "platform.keyword": filters.platform }
+//         });
+//     }
+    
+//     if (filters?.language) {
+//       filterConditions.push({
+//         term: { "language.keyword": filters.language },
+//       });
+//     }
+
+//     if (filters?.videoFormat) {
+//       filterConditions.push({
+//         term: { "videoFormat.keyword": filters.videoFormat },
+//       });
+//     }
+
+//     // 🆕 NEW: Date Range Filter
+//     if (filters?.startDate || filters?.endDate) {
+//         const dateRange: { gte?: string; lte?: string } = {};
+
+//         // If a start date is provided, filter for tasks that start after or on that date
+//         if (filters.startDate) {
+//             dateRange.gte = new Date(filters.startDate).toISOString();
+//         }
+
+//         // If an end date is provided, filter for tasks that end before or on that date
+//         if (filters.endDate) {
+//             dateRange.lte = new Date(filters.endDate).toISOString();
+//         }
+
+//         if (Object.keys(dateRange).length > 0) {
+//             // Apply the date range query to both startDate and endDate fields to get a comprehensive search.
+//             // This example uses a 'bool' with 'should' to match on either the start or end date range.
+//             // A common alternative is to search for tasks whose date range overlaps with the filter range.
+//             // For a simpler filter, you can just query the startDate field.
+//             filterConditions.push({
+//                 bool: {
+//                     should: [
+//                         { range: { startDate: dateRange } },
+//                         { range: { endDate: dateRange } }
+//                     ],
+//                     minimum_should_match: 1
+//                 }
+//             });
+//         }
+//     }
+
+//     // ... rest of the function (query, elasticClient.search, response) ...
+//     const query = {
+//         bool: {
+//             must: filterConditions,
+//             should: [
+//                 // ... your existing should clauses for searchTerm ...
+//             ],
+//             minimum_should_match: 1,
+//         },
+//     };
+
+//     const response = await elasticClient.search({
+//         index: "task",
+//         body: {
+//             query: query,
+//             from: from,
+//             size: size,
+//         },
+//     });
+
+//     res.status(200).json({
+//       message: "Task search results retrieved successfully",
+//       data: {
+//         results: response.hits.hits,
+//         pagination: {
+//           total: typeof response.hits.total === "number"
+//                   ? response.hits.total
+//                   : response.hits.total?.value || 0,
+//           currentPage: currentPage,
+//           totalPages: Math.ceil(
+//             (typeof response.hits.total === "number"
+//               ? response.hits.total
+//               : response.hits.total?.value || 0) / size
+//           ),
+//           pageSize: size,
+//         },
+//       },
+//     });
+//   } catch (err) {
+//     if (err instanceof Error && (err as any).meta?.body?.error) {
+//       console.error("Elasticsearch error:", (err as any).meta.body.error);
+//     } else {
+//       console.error("Elasticsearch error:", err);
+//     }
+//     res.status(500).json({
+//       message: "Internal Server Error",
+//     });
+//   }
+// };
+
+
+// export const searchBrand = async (req: Request, res: Response) => {
+//   const { searchTerm, page = 1 } = req.body;
+//   const size = 10; // 10 items per page
+//   const currentPage = Math.max(1, parseInt(page as string));
+//   const from = (currentPage - 1) * size;
+
+//   try {
+//     const processedTerm = (searchTerm?.toString() || "").toLowerCase().trim();
+
+//     // Extract the root part (before any numbers)
+//     const rootTerm = processedTerm.replace(/[0-9]+$/, "");
+
+//     const isShortTerm = rootTerm.length < 3 || /^\d+$/.test(rootTerm);
+
+//     const response = await elasticClient.search({
+//       index: "brand",
+//       body: {
+//         query: {
+//           bool: {
+//             should: [
+//               // 1. Exact match (highest boost)
+//               {
+//                 term: {
+//                   "username.keyword": {
+//                     value: processedTerm,
+//                     boost: 3.0,
+//                   },
+//                 },
+//               },
+//               // 2. Wildcard full substring match (high boost)
+//               {
+//                 wildcard: {
+//                   username: {
+//                     value: `*${rootTerm.toLowerCase()}*`,
+//                     case_insensitive: true,
+//                     boost: 2.8,
+//                   },
+//                 },
+//               },
+//               // Only include fuzzy logic if not a short numeric term
+//               ...(!isShortTerm
+//                 ? [
+//                   // 3. Fuzzy match
+//                   {
+//                     fuzzy: {
+//                       username: {
+//                         value: rootTerm,
+//                         fuzziness: "AUTO",
+//                         max_expansions: 50,
+//                         boost: 2.0,
+//                       },
+//                     },
+//                   },
+//                   // 4. Pattern like "asitpro"/"asittpro"
+//                   {
+//                     match_phrase_prefix: {
+//                       username: {
+//                         query: rootTerm.replace(
+//                           /([a-z])(\1+)([a-z])/gi,
+//                           "$1$3"
+//                         ),
+//                         boost: 1.8,
+//                       },
+//                     },
+//                   },
+//                   // 5. Match partial prefix
+//                   {
+//                     match: {
+//                       username: {
+//                         query: rootTerm.substring(
+//                           0,
+//                           Math.ceil(rootTerm.length * 0.7)
+//                         ),
+//                         operator: "and" as "and", // Use QueryDslOperator type
+//                         boost: 1.5,
+//                       },
+//                     },
+//                   },
+//                   // 6. Wildcard prefix match
+//                   {
+//                     wildcard: {
+//                       username: {
+//                         value: `${rootTerm.substring(0, 4)}*`,
+//                         case_insensitive: true,
+//                         boost: 1.2,
+//                       },
+//                     },
+//                   },
+//                 ]
+//                 : []),
+//             ],
+//             minimum_should_match: 1,
+//           },
+//         },
+//         from: from,
+//         size: size,
+//       },
+//     });
+
+//     //if total < 10 then search subniche and niche table
+//     res.status(200).json({
+//       message: "Search results retrieved successfully",
+//       data: {
+//         results: response.hits.hits,
+//         pagination: {
+//           total:
+//             typeof response.hits.total === "number"
+//               ? response.hits.total
+//               : response.hits.total?.value || 0,
+//           currentPage: currentPage,
+//           totalPages: Math.ceil(
+//             (typeof response.hits.total === "number"
+//               ? response.hits.total
+//               : response.hits.total?.value || 0) / size
+//           ),
+//           pageSize: size,
+//         },
+//       },
+//     });
+//   } catch (err) {
+//     if (err instanceof Error && (err as any).meta?.body?.error) {
+//       console.error("Elasticsearch error:", (err as any).meta.body.error);
+//     } else {
+//       console.error("Elasticsearch error:", err);
+//     }
+//     res.status(500).json({
+//       message: "Internal Server Error",
+//     });
+//   }
+// };
+
+ //working

@@ -1,0 +1,266 @@
+//old creator search function
+// export const searchCreator = async (req: Request, res: Response) => {
+//   const { searchTerm, page = 1 } = req.body;
+//   const size = 10; // 10 items per page
+//   const currentPage = Math.max(1, parseInt(page as string));
+//   const from = (currentPage - 1) * size;
+
+//   try {
+//     const processedTerm = (searchTerm?.toString() || "").toLowerCase().trim();
+
+//     // Extract the root part (before any numbers)
+//     const rootTerm = processedTerm.replace(/[0-9]+$/, "");
+
+//     const isShortTerm = rootTerm.length <= 3 || /^\d+$/.test(rootTerm);
+
+//     const response = await elasticClient.search({
+//       index: "creator",
+//       body: {
+//         query: {
+//           bool: {
+//             should: [
+//               // 1. Exact match (highest boost)
+//               {
+//                 term: {
+//                   "username.keyword": {
+//                     value: processedTerm,
+//                     boost: 3.0,
+//                   },
+//                 },
+//               },
+//               // 2. Wildcard full substring match (high boost)
+//               {
+//                 wildcard: {
+//                   username: {
+//                     value: `*${rootTerm.toLowerCase()}*`,
+//                     case_insensitive: true,
+//                     boost: 2.8,
+//                   },
+//                 },
+//               },
+//               // Only include fuzzy logic if not a short numeric term
+//               ...(!isShortTerm
+//                 ? [
+//                     // 3. Fuzzy match
+//                     {
+//                       fuzzy: {
+//                         username: {
+//                           value: rootTerm,
+//                           fuzziness: "AUTO",
+//                           max_expansions: 50,
+//                           boost: 2.0,
+//                         },
+//                       },
+//                     },
+//                     // 4. Pattern like "asitpro"/"asittpro"
+//                     {
+//                       match_phrase_prefix: {
+//                         username: {
+//                           query: rootTerm.replace(
+//                             /([a-z])(\1+)([a-z])/gi,
+//                             "$1$3"
+//                           ),
+//                           boost: 1.8,
+//                         },
+//                       },
+//                     },
+//                     // 5. Match partial prefix
+//                     {
+//                       match: {
+//                         username: {
+//                           query: rootTerm.substring(
+//                             0,
+//                             Math.ceil(rootTerm.length * 0.7)
+//                           ),
+//                           operator: "and" as "and", // Use QueryDslOperator type
+//                           boost: 1.5,
+//                         },
+//                       },
+//                     },
+//                     // 6. Wildcard prefix match
+//                     {
+//                       wildcard: {
+//                         username: {
+//                           value: `${rootTerm.substring(0, 4)}*`,
+//                           case_insensitive: true,
+//                           boost: 1.2,
+//                         },
+//                       },
+//                     },
+//                   ]
+//                 : []),
+//             ],
+//             minimum_should_match: 1,
+//           },
+//         },
+//         from: from,
+//         size: size,
+//       },
+//     });
+
+//     //if total < 10 then search subniche and niche table
+//     res.status(200).json({
+//       message: "Search results retrieved successfully",
+//       data: {
+//         results: response.hits.hits,
+//         pagination: {
+//           total:
+//             typeof response.hits.total === "number"
+//               ? response.hits.total
+//               : response.hits.total?.value || 0,
+//           currentPage: currentPage,
+//           totalPages: Math.ceil(
+//             (typeof response.hits.total === "number"
+//               ? response.hits.total
+//               : response.hits.total?.value || 0) / size
+//           ),
+//           pageSize: size,
+//         },
+//       },
+//     });
+//   } catch (err) {
+//     if (err instanceof Error && (err as any).meta?.body?.error) {
+//       console.error("Elasticsearch error:", (err as any).meta.body.error);
+//     } else {
+//       console.error("Elasticsearch error:", err);
+//     }
+//     res.status(500).json({
+//       message: "Internal Server Error",
+//     });
+//   }
+// };
+
+
+ 
+//  export const searchCreator = async (req: Request, res: Response) => {
+//   const { searchTerm, page = 1, filters } = req.body;
+//   const size = 10;
+//   const currentPage = Math.max(1, parseInt(page as string));
+//   const from = (currentPage - 1) * size;
+
+//   try {
+//     const processedTerm = (searchTerm?.toString() || "").toLowerCase().trim();
+
+//     // --- Build Filter Conditions ---
+//     const filterConditions: any[] = [];
+//     if (filters) {
+//       if (filters.language) {
+//         filterConditions.push({ term: { language: filters.language } });
+//       }
+//       if (filters.country) {
+//         filterConditions.push({ term: { country: filters.country } });
+//       }
+//       if (filters.subNicheId) {
+//         filterConditions.push({
+//           nested: {
+//             path: 'sub_niches',
+//             query: {
+//               term: { 'sub_niches.id': filters.subNicheId },
+//             },
+//           },
+//         });
+//       }
+//     }
+
+//     // --- Build Query ---
+//     let query: any;
+
+//     // // If no search term and no filters, return empty results
+//     // if (!processedTerm && filterConditions.length === 0) {
+//     //   res.status(200).json({
+//     //     message: "Creator search results retrieved successfully",
+//     //     data: {
+//     //       results: [],
+//     //       pagination: { total: 0, currentPage: 1, totalPages: 0, pageSize: size },
+//     //     },
+//     //   });
+//     //   return;
+//     // }
+
+//     // If only filters (no search term)
+//     if (!processedTerm && filterConditions.length > 0) {
+//       query = {
+//         bool: {
+//           filter: filterConditions,
+//         },
+//       };
+//     } 
+//     // If search term exists (with or without filters)
+//     else {
+//       query = {
+//         bool: {
+//           filter: filterConditions,
+//           should: [
+//             // 1. Give a HUGE boost to exact username matches
+//             {
+//               term: {
+//                 "username.keyword": {
+//                   value: processedTerm,
+//                   boost: 10.0,
+//                 },
+//               },
+//             },
+//             // 2. Main query: flexible, typo-tolerant search across multiple fields
+//             {
+//               multi_match: {
+//                 query: processedTerm,
+//                 fields: ["name"], // Creator-specific fields
+//                 type: "best_fields",
+//                 operator: "or",
+//                 fuzziness: "AUTO",
+//                 minimum_should_match: "75%",
+//                 boost: 2.0,
+//               },
+//             },
+//             // 3. Add phrase_prefix for "search-as-you-type" behavior
+//             {
+//               multi_match: {
+//                 query: processedTerm,
+//                 fields: [ "name"], // Creator-specific fields
+//                 type: "phrase_prefix",
+//                 boost: 1.0,
+//               },
+//             },
+//           ],
+//           minimum_should_match: processedTerm ? 1 : 0,
+//         },
+//       };
+//     }
+
+//     const response = await elasticClient.search({
+//       index: "creator",
+//       body: {
+//         query: query,
+//         from: from,
+//         size: size,
+//       },
+//     });
+
+//     const totalHits =
+//       typeof response.hits.total === 'number'
+//         ? response.hits.total
+//         : response.hits.total?.value || 0;
+
+//     res.status(200).json({
+//       message: "Creator search results retrieved successfully",
+//       data: {
+//         results: response.hits.hits,
+//         pagination: {
+//           total: totalHits,
+//           currentPage: currentPage,
+//           totalPages: Math.ceil(totalHits / size),
+//           pageSize: size,
+//         },
+//       },
+//     });
+//   } catch (err) {
+//     if (err instanceof Error && (err as any).meta?.body?.error) {
+//       console.error("Elasticsearch error:", (err as any).meta.body.error);
+//     } else {
+//       console.error("Elasticsearch error:", err);
+//     }
+//     res.status(500).json({
+//       message: "Internal Server Error",
+//     });
+//   }
+// };

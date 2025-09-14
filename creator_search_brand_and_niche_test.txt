@@ -1,0 +1,695 @@
+
+// export const searchBrandandNicheTest = async (req: Request, res: Response) => {
+//   const { searchTerm, page = 1 } = req.body;
+//   const size = 10; // 10 items per page
+//   const currentPage = Math.max(1, parseInt(page as string));
+//   const from = (currentPage - 1) * size;
+
+//   try {
+//     const processedTerm = (searchTerm?.toString() || '').toLowerCase().trim();
+//     const rootTerm = processedTerm.replace(/[0-9]+$/, '');
+//     const isShortTerm = rootTerm.length <= 3 || /^\d+$/.test(rootTerm);
+
+//     const response = await elasticClient.search({
+//       index: ['brand', 'niche'],
+//       body: {
+//         query: {
+//           dis_max: {
+//             queries: [
+//               {
+//                 multi_match: {
+//                   query: processedTerm,
+//                   fields: ['username^3', 'name^2'],
+//                   type: 'best_fields',
+//                   fuzziness: 'AUTO',
+//                 },
+//               },
+//               {
+//                 wildcard: {
+//                   username: { value: `*${rootTerm}*`, case_insensitive: true, boost: 2.8 }
+//                 }
+//               },
+//               ...(!isShortTerm ? [
+//                 {
+//                   match_phrase_prefix: {
+//                     username: {
+//                       query: rootTerm.replace(/([a-z])(\1+)([a-z])/gi, '$1$3'),
+//                       boost: 1.8
+//                     }
+//                   }
+//                 },
+//                 {
+//                   wildcard: {
+//                     username: {
+//                       value: `${rootTerm.substring(0, 4)}*`,
+//                       case_insensitive: true,
+//                       boost: 1.2
+//                     }
+//                   }
+//                 }
+//               ] : [])
+//             ],
+//             tie_breaker: 0.7
+//           }
+//         },
+//         from,
+//         size,
+//         aggs: {
+//           total_count: {
+//             value_count: {
+//               field: 'username.keyword'
+//             }
+//           }
+//         }
+//       },
+//     });
+
+//     res.status(200).json({
+//       message: "Search results retrieved successfully",
+//       data: {
+//         results: response.hits.hits,
+//         pagination: {
+//           total:
+//             typeof response.hits.total === "number"
+//               ? response.hits.total
+//               : response.hits.total?.value || 0,
+//           currentPage: currentPage,
+//           totalPages: Math.ceil(
+//             (typeof response.hits.total === "number"
+//               ? response.hits.total
+//               : response.hits.total?.value || 0) / size
+//           ),
+//           pageSize: size,
+//         },
+//       },
+//     });
+//   } catch (err) {
+//     console.error('Search error:', err);
+//     res.status(500).json({ message: 'Internal Server Error' });
+//   }
+// };
+
+// export const searchBrandTest2 = async (req: Request, res: Response) => {
+//   const { searchTerm, page = 1 } = req.body;
+//   const size = 10;
+//   const currentPage = Math.max(1, parseInt(page as string));
+//   const from = (currentPage - 1) * size;
+
+//   try {
+//     const processedTerm = (searchTerm?.toString() || "").toLowerCase().trim();
+//     const rootTerm = processedTerm.replace(/[0-9]+$/, "");
+//     const isShortTerm = rootTerm.length <= 3 || /^\d+$/.test(rootTerm);
+
+//     // Build the should array with field-specific queries
+//     const shouldQueries: any[] = [
+//       // Exact match for username (brand)
+//       {
+//         term: {
+//           "username.keyword": {
+//             value: processedTerm,
+//             boost: 3.0,
+//           },
+//         },
+//       },
+//       // Exact match for bio (brand)
+//       {
+//         term: {
+//           "bio.keyword": {
+//             value: processedTerm,
+//             boost: 2.5,
+//           },
+//         },
+//       },
+//       // Exact match for name (niche)
+//       {
+//         term: {
+//           "name.keyword": {
+//             value: processedTerm,
+//             boost: 3.0,
+//           },
+//         },
+//       },
+//       // Wildcard for username (brand)
+//       {
+//         wildcard: {
+//           username: {
+//             value: `*${rootTerm.toLowerCase()}*`,
+//             case_insensitive: true,
+//             boost: 2.8,
+//           },
+//         },
+//       },
+//       // Wildcard for bio (brand)
+//       {
+//         wildcard: {
+//           bio: {
+//             value: `*${rootTerm.toLowerCase()}*`,
+//             case_insensitive: true,
+//             boost: 2.3,
+//           },
+//         },
+//       },
+//       // Wildcard for name (niche)
+//       {
+//         wildcard: {
+//           name: {
+//             value: `*${rootTerm.toLowerCase()}*`,
+//             case_insensitive: true,
+//             boost: 2.8,
+//           },
+//         },
+//       },
+//     ];
+
+//     // Add fuzzy and prefix matches for longer terms
+//     if (!isShortTerm) {
+//       shouldQueries.push(
+//         {
+//           fuzzy: {
+//             username: {
+//               value: rootTerm,
+//               fuzziness: "AUTO",
+//               max_expansions: 50,
+//               boost: 2.0,
+//             },
+//           },
+//         },
+//         {
+//           fuzzy: {
+//             bio: {
+//               value: rootTerm,
+//               fuzziness: "AUTO",
+//               max_expansions: 50,
+//               boost: 1.5,
+//             },
+//           },
+//         },
+//         {
+//           fuzzy: {
+//             name: {
+//               value: rootTerm,
+//               fuzziness: "AUTO",
+//               max_expansions: 50,
+//               boost: 2.0,
+//             },
+//           },
+//         },
+//         {
+//           match_phrase_prefix: {
+//             username: {
+//               query: rootTerm.replace(/([a-z])(\1+)([a-z])/gi, "$1$3"),
+//               boost: 1.8,
+//             },
+//           },
+//         },
+//         {
+//           match_phrase_prefix: {
+//             bio: {
+//               query: rootTerm.replace(/([a-z])(\1+)([a-z])/gi, "$1$3"),
+//               boost: 1.2,
+//             },
+//           },
+//         },
+//         {
+//           match_phrase_prefix: {
+//             name: {
+//               query: rootTerm.replace(/([a-z])(\1+)([a-z])/gi, "$1$3"),
+//               boost: 1.8,
+//             },
+//           },
+//         },
+//         {
+//           match: {
+//             username: {
+//               query: rootTerm.substring(0, Math.ceil(rootTerm.length * 0.7)),
+//               operator: "and" as "and",
+//               boost: 1.5,
+//             },
+//           },
+//         },
+//         {
+//           match: {
+//             bio: {
+//               query: rootTerm.substring(0, Math.ceil(rootTerm.length * 0.7)),
+//               operator: "and" as "and",
+//               boost: 1.0,
+//             },
+//           },
+//         },
+//         {
+//           match: {
+//             name: {
+//               query: rootTerm.substring(0, Math.ceil(rootTerm.length * 0.7)),
+//               operator: "and" as "and",
+//               boost: 1.5,
+//             },
+//           },
+//         }
+//       );
+//     }
+
+//     const response = await elasticClient.search({
+//       index: ["brand", "niche"],
+//       body: {
+//         query: {
+//           bool: {
+//             should: shouldQueries,
+//             minimum_should_match: 1,
+//           },
+//         },
+//         from: from,
+//         size: size,
+//       },
+//     });
+
+//     res.status(200).json({
+//       message: "Search results retrieved successfully",
+//       data: {
+//         results: response.hits.hits,
+//         pagination: {
+//           total:
+//             typeof response.hits.total === "number"
+//               ? response.hits.total
+//               : response.hits.total?.value || 0,
+//           currentPage: currentPage,
+//           totalPages: Math.ceil(
+//             (typeof response.hits.total === "number"
+//               ? response.hits.total
+//               : response.hits.total?.value || 0) / size
+//           ),
+//           pageSize: size,
+//         },
+//       },
+//     });
+//   } catch (err) {
+//     if (err instanceof Error && (err as any).meta?.body?.error) {
+//       console.error("Elasticsearch error:", (err as any).meta.body.error);
+//     } else {
+//       console.error("Elasticsearch error:", err);
+//     }
+//     res.status(500).json({
+//       message: "Internal Server Error",
+//     });
+//   }
+// };
+
+// function mergeUniqueBrands(brandsA: any[], brandsB: any[]) {
+//   const map = new Map();
+//   [...brandsA, ...brandsB].forEach((brand) => {
+//     if (brand && brand.id) map.set(brand.id, brand);
+//   });
+//   return Array.from(map.values());
+// }
+
+// export const searchBrandTest3 = async (req: Request, res: Response) => {
+//   const { searchTerm, page = 1 } = req.body;
+//   const size = 10;
+//   const currentPage = Math.max(1, parseInt(page as string));
+//   const from = (currentPage - 1) * size;
+
+//   try {
+//     const processedTerm = (searchTerm?.toString() || "").toLowerCase().trim();
+//     const rootTerm = processedTerm.replace(/[0-9]+$/, "");
+//     const isShortTerm = rootTerm.length <= 3 || /^\d+$/.test(rootTerm);
+
+//     // Build the should array with field-specific queries
+//     const shouldQueries: any[] = [
+//       {
+//         term: {
+//           "username.keyword": {
+//             value: processedTerm,
+//             boost: 3.0,
+//           },
+//         },
+//       },
+//       {
+//         term: {
+//           "bio.keyword": {
+//             value: processedTerm,
+//             boost: 2.5,
+//           },
+//         },
+//       },
+//       {
+//         term: {
+//           "name.keyword": {
+//             value: processedTerm,
+//             boost: 3.0,
+//           },
+//         },
+//       },
+//       {
+//         wildcard: {
+//           username: {
+//             value: `*${rootTerm.toLowerCase()}*`,
+//             case_insensitive: true,
+//             boost: 2.8,
+//           },
+//         },
+//       },
+//       {
+//         wildcard: {
+//           bio: {
+//             value: `*${rootTerm.toLowerCase()}*`,
+//             case_insensitive: true,
+//             boost: 2.3,
+//           },
+//         },
+//       },
+//       {
+//         wildcard: {
+//           name: {
+//             value: `*${rootTerm.toLowerCase()}*`,
+//             case_insensitive: true,
+//             boost: 2.8,
+//           },
+//         },
+//       },
+//     ];
+
+//     if (!isShortTerm) {
+//       shouldQueries.push(
+//         {
+//           fuzzy: {
+//             username: {
+//               value: rootTerm,
+//               fuzziness: "AUTO",
+//               max_expansions: 50,
+//               boost: 2.0,
+//             },
+//           },
+//         },
+//         {
+//           fuzzy: {
+//             bio: {
+//               value: rootTerm,
+//               fuzziness: "AUTO",
+//               max_expansions: 50,
+//               boost: 1.5,
+//             },
+//           },
+//         },
+//         {
+//           fuzzy: {
+//             name: {
+//               value: rootTerm,
+//               fuzziness: "AUTO",
+//               max_expansions: 50,
+//               boost: 2.0,
+//             },
+//           },
+//         },
+//         {
+//           match_phrase_prefix: {
+//             username: {
+//               query: rootTerm.replace(/([a-z])(\1+)([a-z])/gi, "$1$3"),
+//               boost: 1.8,
+//             },
+//           },
+//         },
+//         {
+//           match_phrase_prefix: {
+//             bio: {
+//               query: rootTerm.replace(/([a-z])(\1+)([a-z])/gi, "$1$3"),
+//               boost: 1.2,
+//             },
+//           },
+//         },
+//         {
+//           match_phrase_prefix: {
+//             name: {
+//               query: rootTerm.replace(/([a-z])(\1+)([a-z])/gi, "$1$3"),
+//               boost: 1.8,
+//             },
+//           },
+//         },
+//         {
+//           match: {
+//             username: {
+//               query: rootTerm.substring(0, Math.ceil(rootTerm.length * 0.7)),
+//               operator: "and" as "and",
+//               boost: 1.5,
+//             },
+//           },
+//         },
+//         {
+//           match: {
+//             bio: {
+//               query: rootTerm.substring(0, Math.ceil(rootTerm.length * 0.7)),
+//               operator: "and" as "and",
+//               boost: 1.0,
+//             },
+//           },
+//         },
+//         {
+//           match: {
+//             name: {
+//               query: rootTerm.substring(0, Math.ceil(rootTerm.length * 0.7)),
+//               operator: "and" as "and",
+//               boost: 1.5,
+//             },
+//           },
+//         }
+//       );
+//     }
+
+//     // 1. Elasticsearch search for both brand and niche indices
+//     const response = await elasticClient.search({
+//       index: ["brand", "niche"],
+//       body: {
+//         query: {
+//           bool: {
+//             should: shouldQueries,
+//             minimum_should_match: 1,
+//           },
+//         },
+//         from: 0, // We'll paginate after merging
+//         size: 100, // Fetch enough to cover merging and pagination
+//       },
+//     });
+
+//     // 2. Separate hits into brands and niches
+//     const hits = response.hits.hits || [];
+//     const esBrands: any[] = [];
+//     const esNiches: any[] = [];
+//     for (const hit of hits) {
+//       if (hit._index === "brand") {
+//         esBrands.push({ ...(typeof hit._source === "object" && hit._source !== null ? hit._source : {}), id: hit._id });
+//       } else if (hit._index === "niche") {
+//         esNiches.push({ ...(typeof hit._source === "object" && hit._source !== null ? hit._source : {}), id: hit._id });
+//       }
+//     }
+
+//     // 3. From niches, extract niche IDs and get brands from Prisma
+//     const nicheIds = esNiches.map((n) => n.id).filter(Boolean);
+
+//     let prismaBrands: any[] = [];
+//     if (nicheIds.length > 0) {
+//       prismaBrands = await prisma.brand.findMany({
+//         where: {
+//           nicheId: { in: nicheIds },
+//         },
+//         select: {
+//           id: true,
+//           username: true,
+//           email: true,
+//           bio: true,
+//           nicheId: true,
+//           // Add more fields as needed
+//         },
+//       });
+//     }
+
+//     // 4. Merge and deduplicate brands
+//     const mergedBrands = mergeUniqueBrands(esBrands, prismaBrands);
+
+//     // 5. Paginate merged brands
+//     const total = mergedBrands.length;
+//     const paginatedBrands = mergedBrands.slice(from, from + size);
+
+//     res.status(200).json({
+//       message: "Search results retrieved successfully",
+//       data: {
+//         results: paginatedBrands,
+//         pagination: {
+//           total,
+//           currentPage,
+//           totalPages: Math.ceil(total / size),
+//           pageSize: size,
+//         },
+//       },
+//     });
+//   } catch (err) {
+//     if (err instanceof Error && (err as any).meta?.body?.error) {
+//       console.error("Elasticsearch error:", (err as any).meta.body.error);
+//     } else {
+//       console.error("Elasticsearch error:", err);
+//     }
+//     res.status(500).json({
+//       message: "Internal Server Error",
+//     });
+//   }
+// };
+
+// export const searchBrandTest4 = async (req: Request, res: Response) => {
+//   const { searchTerm, page = 1 } = req.body;
+//   const size = 10;
+//   const currentPage = Math.max(1, parseInt(page as string));
+//   const from = (currentPage - 1) * size;
+
+//   try {
+//     const processedTerm = (searchTerm?.toString() || "").toLowerCase().trim();
+//     const rootTerm = processedTerm.replace(/[0-9]+$/, "");
+//     const isShortTerm = rootTerm.length <= 3 || /^\d+$/.test(rootTerm);
+
+//     // Build the should array with field-specific queries
+//     const shouldQueries: any[] = [
+//       {
+//         term: { "username.keyword": { value: processedTerm, boost: 3.0 } },
+//       },
+//       {
+//         term: { "bio.keyword": { value: processedTerm, boost: 2.5 } },
+//       },
+//       {
+//         term: { "name.keyword": { value: processedTerm, boost: 3.0 } },
+//       },
+//       {
+//         wildcard: {
+//           username: { value: `*${rootTerm.toLowerCase()}*`, boost: 2.8 },
+//         },
+//       },
+//       {
+//         wildcard: {
+//           bio: { value: `*${rootTerm.toLowerCase()}*`, boost: 2.3 },
+//         },
+//       },
+//       {
+//         wildcard: {
+//           name: { value: `*${rootTerm.toLowerCase()}*`, boost: 2.8 },
+//         },
+//       },
+//     ];
+
+//     if (!isShortTerm) {
+//       shouldQueries.push(
+//         {
+//           fuzzy: { username: { value: rootTerm, fuzziness: "AUTO", boost: 2.0 } },
+//         },
+//         {
+//           fuzzy: { bio: { value: rootTerm, fuzziness: "AUTO", boost: 1.5 } },
+//         },
+//         {
+//           fuzzy: { name: { value: rootTerm, fuzziness: "AUTO", boost: 2.0 } },
+//         },
+//         {
+//           match_phrase_prefix: {
+//             username: { query: rootTerm.replace(/([a-z])(\1+)([a-z])/gi, "$1$3"), boost: 1.8 },
+//           },
+//         },
+//         {
+//           match_phrase_prefix: {
+//             bio: { query: rootTerm.replace(/([a-z])(\1+)([a-z])/gi, "$1$3"), boost: 1.2 },
+//           },
+//         },
+//         {
+//           match_phrase_prefix: {
+//             name: { query: rootTerm.replace(/([a-z])(\1+)([a-z])/gi, "$1$3"), boost: 1.8 },
+//           },
+//         },
+//         {
+//           match: {
+//             username: {
+//               query: rootTerm.substring(0, Math.ceil(rootTerm.length * 0.7)),
+//               operator: "and",
+//               boost: 1.5,
+//             },
+//           },
+//         },
+//         {
+//           match: {
+//             bio: {
+//               query: rootTerm.substring(0, Math.ceil(rootTerm.length * 0.7)),
+//               operator: "and",
+//               boost: 1.0,
+//             },
+//           },
+//         },
+//         {
+//           match: {
+//             name: {
+//               query: rootTerm.substring(0, Math.ceil(rootTerm.length * 0.7)),
+//               operator: "and",
+//               boost: 1.5,
+//             },
+//           },
+//         }
+//       );
+//     }
+
+//     // Execute Elasticsearch query
+//     const esResponse = await elasticClient.search({
+//       index: ["brand", "niche"],
+//       body: {
+//         query: { bool: { should: shouldQueries, minimum_should_match: 1 } },
+//         from,
+//         size,
+//       },
+//     });
+
+//     // Separate results into brands and niches
+//     const esBrands: any[] = [];
+//     const esNiches: any[] = [];
+//     esResponse.hits.hits.forEach((hit) => {
+//       if (hit._index === "brand") esBrands.push(hit._source);
+//       if (hit._index === "niche") esNiches.push(hit._source);
+//     });
+
+//     // Get related brands through Prisma
+//     const nicheIds = esNiches.map((niche) => niche.id);
+//     const prismaBrands = nicheIds.length > 0
+//       ? await prisma.brand.findMany({
+//           where: { nicheId: { in: nicheIds } },
+//           select: {
+//             id: true,
+//             username: true,
+//             bio: true,
+//             email: true,
+//             country: true,
+//             language: true,
+//             nicheId: true,
+//           },
+//         })
+//       : [];
+
+//     // Combine and deduplicate brands
+//     const combinedResults = [...esBrands, ...prismaBrands];
+//     const uniqueBrands = Array.from(
+//       new Map(combinedResults.map((brand) => [brand.id, brand])).values()
+//     );
+
+//     // Apply pagination
+//     const startIndex = (currentPage - 1) * size;
+//     const paginatedResults = uniqueBrands.slice(startIndex, startIndex + size);
+
+//     // Calculate pagination metadata
+//     const totalItems = uniqueBrands.length;
+//     const totalPages = Math.ceil(totalItems / size);
+
+//     res.status(200).json({
+//       message: "Search results retrieved successfully",
+//       data: {
+//         results: paginatedResults,
+//         pagination: {
+//           total: totalItems,
+//           currentPage,
+//           totalPages,
+//           pageSize: size,
+//         },
+//       },
+//     });
+//   } catch (err) {
+//     const error = err as Error & { meta?: { body?: { error?: unknown } } };
+//     console.error("Search error:", error.meta?.body?.error || error);
+//     res.status(500).json({ message: "Internal Server Error" });
+//   }
+// };
