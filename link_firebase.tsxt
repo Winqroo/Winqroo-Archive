@@ -1,0 +1,144 @@
+// Link Firebase account to existing user
+export const linkFirebaseAccount = async (req: Request, res: Response) => {
+  // Validate request body
+  const validation = validateRequest(FirebaseLinkAccountSchema, req.body);
+  
+  if (!validation.success) {
+    res.status(400).json({ 
+      message: "Validation failed", 
+      errors: validation.error 
+    });
+    return;
+  }
+
+  const { idToken } = validation.data;
+  const userId = (req as any).user?.id;
+  const userRole = (req as any).user?.role;
+
+  if (!userId || !userRole) {
+    res.status(401).json({ message: "User not authenticated" });
+    return;
+  }
+
+  try {
+    // Verify Firebase ID token
+    const firebaseUser = await verifyFirebaseToken(idToken);
+    
+    if (!firebaseUser.email) {
+      res.status(400).json({ message: "Email not found in Firebase user data" });
+      return;
+    }
+
+    // Check if Firebase UID is already linked to another account
+    let existingFirebaseUser = null;
+    if (userRole === Role.CREATOR) {
+      existingFirebaseUser = await prisma.creator.findUnique({
+        where: { firebaseUid: firebaseUser.uid }
+      });
+    } else {
+      existingFirebaseUser = await prisma.brand.findUnique({
+        where: { firebaseUid: firebaseUser.uid }
+      });
+    }
+
+    if (existingFirebaseUser) {
+      res.status(400).json({ message: "Firebase account is already linked to another user" });
+      return;
+    }
+
+    // Update user with Firebase UID
+    let updatedUser = null;
+    if (userRole === Role.CREATOR) {
+      updatedUser = await prisma.creator.update({
+        where: { id: userId },
+        data: {
+          firebaseUid: firebaseUser.uid,
+          isFirebaseUser: true,
+          profilePicUrl: firebaseUser.picture
+        },
+        include: { sub_niches: true }
+      });
+    } else {
+      updatedUser = await prisma.brand.update({
+        where: { id: userId },
+        data: {
+          firebaseUid: firebaseUser.uid,
+          isFirebaseUser: true,
+          profilePicUrl: firebaseUser.picture
+        },
+        include: { niche: true }
+      });
+    }
+
+    // Sanitize response data to remove sensitive fields
+    const sanitizedUser = sanitizeUser(updatedUser);
+
+    res.status(200).json({
+      message: "Firebase account linked successfully",
+      data: sanitizedUser
+    });
+
+  } catch (error) {
+    console.error("Link Firebase account error:", error);
+    // Don't expose detailed error information in production
+    res.status(500).json({ 
+      message: "Internal Server Error",
+      ...(process.env.NODE_ENV !== "production" && { 
+        error: error instanceof Error ? error.message : "Unknown error" 
+      })
+    });
+  }
+};
+
+// Unlink Firebase account from user
+export const unlinkFirebaseAccount = async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id;
+  const userRole = (req as any).user?.role;
+
+  if (!userId || !userRole) {
+    res.status(401).json({ message: "User not authenticated" });
+    return;
+  }
+
+  try {
+    // Update user to remove Firebase UID
+    let updatedUser = null;
+    if (userRole === Role.CREATOR) {
+      updatedUser = await prisma.creator.update({
+        where: { id: userId },
+        data: {
+          firebaseUid: null,
+          isFirebaseUser: false
+        },
+        include: { sub_niches: true }
+      });
+    } else {
+      updatedUser = await prisma.brand.update({
+        where: { id: userId },
+        data: {
+          firebaseUid: null,
+          isFirebaseUser: false
+        },
+        include: { niche: true }
+      });
+    }
+
+    // Sanitize response data to remove sensitive fields
+    const sanitizedUser = sanitizeUser(updatedUser);
+
+    res.status(200).json({
+      message: "Firebase account unlinked successfully",
+      data: sanitizedUser
+    });
+
+  } catch (error) {
+    console.error("Unlink Firebase account error:", error);
+    // Don't expose detailed error information in production
+    res.status(500).json({ 
+      message: "Internal Server Error",
+      ...(process.env.NODE_ENV !== "production" && { 
+        error: error instanceof Error ? error.message : "Unknown error" 
+      })
+    });
+  }
+};
